@@ -3,11 +3,15 @@ package main
 import (
 	"log"
 
-	//"github.com/charmbracelet/bubbles/spinner"
-	//tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/bubbles/spinner"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/spf13/cobra"
+
 	"github.com/prem0x01/ncCmdExe/cmd"
-	//"github.com/spf13/cobra"
+	"github.com/prem0x01/ncCmdExe/internal/core"
+	"github.com/prem0x01/ncCmdExe/internal/scanner"
+	"github.com/prem0x01/ncCmdExe/internal/ui"
 )
 
 var (

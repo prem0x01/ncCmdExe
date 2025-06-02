@@ -33,7 +33,7 @@ var rootCmd = &cobra.Command{
 	Long: `
 	______________________________________________
 	|                ncCmdExe                    |
-	|       A go implementation od net cat,      |
+	|       A go implementation of net cat,      |
 	|    ( it's a basic implementation for       |
 	|   practice purpose, but yeah it works )    |
 	|____________________________________________|
