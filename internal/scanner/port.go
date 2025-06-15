@@ -34,14 +34,14 @@ var (
 )
 
 
-type ScanType int 
+type ScanType int
 
 
 const (
 	TCPScan ScanType = iota
 	UDPScan
-	SYNScan // needs root privilege 
-	CoonectScan  
+	SYNScan // needs root privilege
+	CoonectScan
 )
 
 
@@ -52,21 +52,21 @@ type Scanner struct {
 	maxWorkers int
 	scanType ScanType
 	userAgent string
-	skipHostDomain bool 
+	skipHostDomain bool
 	outputFormat string
 	rateLimit time.Duration
-	retries int 
-	proxyURL string 
+	retries int
+	proxyURL string
 }
 
 type ScannerConfig struct {
 	Timeout time.Duration
 	Verbose bool
 	Version bool
-	MaxWorkers int 
+	MaxWorkers int
 	ScanType ScanType
 	UserAgent string
-	SKipHostDomain bool 
+	SKipHostDomain bool
 	OutputFormat string
 	RateLimit time.Duration
 	Retries int
@@ -78,7 +78,7 @@ func New(config ScannerConfig) *Scanner {
 		config.Timeout = 3 * time.Second
 	}
 	if config.MaxWorkers == 0{
-		config.MaxWorkers = 100 
+		config.MaxWorkers = 100
 	}
 	if config.UserAgent == ""{
 		config.UserAgent = "Net-CMD-EXE/1.0"
@@ -114,12 +114,12 @@ type ScanResult struct {
 	Filtered bool `json:"filtered,omitempty"`
 	State string `json:"state"`
 	ResponseTime time.Duration `json:"response_time"`
-	SSL *SSLInfo `json:"ssl,omitempty`
+	SSL *SSLInfo `json:"ssl,omitempty"`
 	HTTP *HTTPInfo `json:"http,omitempty"`
 	Vulnerabilities []string `json:"vulnerabilities,omitempty"`
 	Headers map[string]string `json:"headers,omitempty"`
 	Timestamp time.Time `json:"timestamp"`
-	
+
 }
 
 type SSLInfo struct {
@@ -162,7 +162,7 @@ type OSInfo struct {
 
 func (s *Scanner) ScanHost(host, portRange string) (*HostScanResult, error) {
 	start := time.Now()
-	
+
 	if s.verbose {
 		fmt.Println(scanStyle.Render(fmt.Sprintf("Starting scan of  %s.....", host)))
 	}
@@ -176,7 +176,7 @@ func (s *Scanner) ScanHost(host, portRange string) (*HostScanResult, error) {
 			IsAlive: false,
 			Timestamp: time.Now(),
 			ScanTime: time.Since(start),
-		}, nil 
+		}, nil
 	}
 	ports, err := s.parsePorts(portRange)
 	if err != nil {
@@ -204,7 +204,7 @@ func (s *Scanner) ScanHost(host, portRange string) (*HostScanResult, error) {
 	}
 
 	sort.Slice(hostResult.OpenPorts, func(i, j int) bool {
-		resilts hoshostResult.OpenPorts[i].Port < hosthostResult.OpenPorts[j].Port 
+		resilts hoshostResult.OpenPorts[i].Port < hosthostResult.OpenPorts[j].Port
 	})
 
 	if len(hostResult.OpenPorts) > 0 {
@@ -212,14 +212,45 @@ func (s *Scanner) ScanHost(host, portRange string) (*HostScanResult, error) {
 	}
 
 	s.displayResults(hostResult)
-	return hostResult, nil 
+	return hostResult, nil
 }
 
-	
+
 
 func (s *Scanner) ScanRange(ipRange, portRange string) ([]*HostScanResult, error){
 	fmt.Println(scanStyle.Render(fmt.Sprintf("Scanning range %s...", ipRange)))
-	// TODO: Implement IP range scanning
+
+	ips, err := parseIPRange(ipRange)
+	if err != nil {
+		return nil, err
+	}
+
+	var results []*HostScanResult
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
+	sem := make(chan struct{}, s.maxWorkers)
+
+	for _, ip := range ips {
+		wg.Add(1)
+		go func(host string) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			res, err := s.ScanHost(host, portRange)
+			if err == nil {
+				mu.Lock()
+				results = append(results, res)
+				mu.Unlock()
+			} else if s.verbose {
+                fmt.Println(errorStyle.Render(fmt.Sprintf("Error scannig host %s: %v", host, err)))
+            }
+		}(ip)
+	}
+
+	wg.Wait()
+	return results, nil
 
 
 }
@@ -395,3 +426,37 @@ func (s *Scanner) detectVersion(host string, port int) string {
 
 	return fmt.Sprintf("(%s)", banner)
 }
+
+func parseIPRange(ipRange string) ([]string, error) {
+	parts := strings.Split(ipRange, "-")
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("invalid IP range: expected format 'startIP-endIP'")
+	}
+
+	startIP := net.ParseIP(parts[0]).To4()
+	endIP := net.ParseIP(parts[1]).To4()
+	if startIP == nil || endIP == nil {
+		return nil, fmt.Errorf("invalid IP address in range")
+	}
+
+	var ips []string
+	for ip := startIP; !ip.Equal(endIP); ip = nextIP(ip) {
+		ips = append(ips, ip.String())
+	}
+	ips = append(ips, endIP.String())
+	return ips, nil
+}
+
+func nextIP(ip net.IP) net.IP {
+	ip = ip.To4()
+	result := make(net.IP, len(ip))
+	copy(result, ip)
+	for i := len(result) - 1; i >= 0; i-- {
+		result[i]++
+		if result[i] != 0 {
+			break
+		}
+	}
+	return result
+}
+

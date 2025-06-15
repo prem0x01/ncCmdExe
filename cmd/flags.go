@@ -37,7 +37,7 @@ var rootCmd = &cobra.Command{
 	|    ( it's a basic implementation for       |
 	|   practice purpose, but yeah it works )    |
 	|____________________________________________|
-	
+
 	Features:
 		[*] Listen and Connect
 		[*] Command Execution & Shell access
@@ -88,7 +88,7 @@ func handleActions(args []string) {
 		server := core.NewServer(port, udp, execute, shell)
 		server.Start()
 	} else if scan {
-		scanner := scanner.New(timeout, verbose, version)
+		scanner := scanner.New(scanner.ScannerConfig{})
 		if scanRange != "" {
 			scanner.ScanRange(scanRange, scanPorts)
 		} else if len(args) > 0 {
