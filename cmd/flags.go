@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/prem0x01/ncCmdExe/internal/core"
@@ -29,14 +30,20 @@ var (
 
 var rootCmd = &cobra.Command{
 	Use:   "ncCmdExe",
-	Short: "NetCat with  Command Execution! tool ",
+	Short: "NetCat with  Command Execution!",
 	Long: `
-	______________________________________________
-	|                ncCmdExe                    |
-	|       A go implementation of net cat,      |
-	|    ( it's a basic implementation for       |
-	|   practice purpose, but yeah it works )    |
-	|____________________________________________|
+
+                      /$$$$$$                      /$$ /$$$$$$$$
+                     /$$__  $$                    | $$| $$_____/
+ /$$$$$$$   /$$$$$$$| $$  \__/ /$$$$$$/$$$$   /$$$$$$$| $$       /$$   /$$  /$$$$$$
+| $$__  $$ /$$_____/| $$      | $$_  $$_  $$ /$$__  $$| $$$$$   |  $$ /$$/ /$$__  $$
+| $$  \ $$| $$      | $$      | $$ \ $$ \ $$| $$  | $$| $$__/    \  $$$$/ | $$$$$$$$
+| $$  | $$| $$      | $$    $$| $$ | $$ | $$| $$  | $$| $$        >$$  $$ | $$_____/
+| $$  | $$|  $$$$$$$|  $$$$$$/| $$ | $$ | $$|  $$$$$$$| $$$$$$$$ /$$/\  $$|  $$$$$$$
+|__/  |__/ \_______/ \______/ |__/ |__/ |__/ \_______/|________/|__/  \__/ \_______/
+
+	Developed by : prem0x01  
+
 
 	Features:
 		[*] Listen and Connect
@@ -46,7 +53,11 @@ var rootCmd = &cobra.Command{
 
 	Run: func(cmd *cobra.Command, args []string) {
 		if !listen && !scan && execute == "" && len(args) == 0 {
-			startUI()
+			cmd.Help()
+			return
+		}
+		if !listen && !scan && execute == "" && len(args) == 1 {
+			startUIWithConnect(args[0])
 			return
 		}
 
@@ -74,8 +85,10 @@ func Execute() error {
 	return rootCmd.Execute()
 }
 
-func startUI() {
+func startUIWithConnect(hostPort string) {
 	m := ui.NewModel()
+	m.StateToConnect(hostPort)
+
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Error running TUI: %v\n", err)
@@ -83,12 +96,26 @@ func startUI() {
 	}
 }
 
+/*
+	func startUI() {
+		m := ui.NewModel()
+		p := tea.NewProgram(m, tea.WithAltScreen())
+		if _, err := p.Run(); err != nil {
+			fmt.Printf("Error running TUI: %v\n", err)
+			os.Exit(1)
+		}
+	}
+*/
 func handleActions(args []string) {
 	if listen {
 		server := core.NewServer(port, udp, execute, shell)
 		server.Start()
 	} else if scan {
-		scanner := scanner.New(scanner.ScannerConfig{})
+		scanner := scanner.New(scanner.ScannerConfig{
+			Timeout: time.Second * 5,
+			Verbose: true,
+			Version: true,
+		})
 		if scanRange != "" {
 			scanner.ScanRange(scanRange, scanPorts)
 		} else if len(args) > 0 {

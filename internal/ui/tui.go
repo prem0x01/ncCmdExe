@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -261,7 +262,11 @@ func (m Model) connectToHost(hostPort string) tea.Cmd {
 
 func (m Model) scanHost(target string) tea.Cmd {
 	return func() tea.Msg {
-		scanner := scanner.New(5, false, true)
+		scanner := scanner.New(scanner.ScannerConfig{
+			Timeout: time.Second * 5,
+			Verbose: true,
+			Version: true,
+		})
 		results := scanner.ScanHostWithResults(target, "1-1000")
 		return scanResultMsg{results: results}
 	}
@@ -353,3 +358,10 @@ func (m Model) inputView() string {
 	return s.String()
 
 }
+
+func (m *Model) StateToConnect(hostPort string) {
+	m.state = connectView
+	m.textInput.Placeholder = "Enter host:port (e.g., localhost:8080)..."
+	m.textInput.SetValue(hostPort)
+}
+

@@ -3,6 +3,7 @@ package scanner
 import (
 	"fmt"
 	"net"
+	//"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -33,9 +34,7 @@ var (
 			Foreground(lipgloss.Color("#FFA500"))
 )
 
-
 type ScanType int
-
 
 const (
 	TCPScan ScanType = iota
@@ -44,43 +43,42 @@ const (
 	CoonectScan
 )
 
-
 type Scanner struct {
-	timeout time.Duration
-	verbose bool
-	version bool
-	maxWorkers int
-	scanType ScanType
-	userAgent string
+	timeout        time.Duration
+	verbose        bool
+	version        bool
+	maxWorkers     int
+	scanType       ScanType
+	userAgent      string
 	skipHostDomain bool
-	outputFormat string
-	rateLimit time.Duration
-	retries int
-	proxyURL string
+	outputFormat   string
+	rateLimit      time.Duration
+	retries        int
+	proxyURL       string
 }
 
 type ScannerConfig struct {
-	Timeout time.Duration
-	Verbose bool
-	Version bool
-	MaxWorkers int
-	ScanType ScanType
-	UserAgent string
+	Timeout        time.Duration
+	Verbose        bool
+	Version        bool
+	MaxWorkers     int
+	ScanType       ScanType
+	UserAgent      string
 	SKipHostDomain bool
-	OutputFormat string
-	RateLimit time.Duration
-	Retries int
-	ProxyURL string
+	OutputFormat   string
+	RateLimit      time.Duration
+	Retries        int
+	ProxyURL       string
 }
 
 func New(config ScannerConfig) *Scanner {
-	if config.Timeout == 0{
+	if config.Timeout == 0 {
 		config.Timeout = 3 * time.Second
 	}
-	if config.MaxWorkers == 0{
+	if config.MaxWorkers == 0 {
 		config.MaxWorkers = 100
 	}
-	if config.UserAgent == ""{
+	if config.UserAgent == "" {
 		config.UserAgent = "Net-CMD-EXE/1.0"
 	}
 	if config.Retries == 0 {
@@ -88,69 +86,66 @@ func New(config ScannerConfig) *Scanner {
 	}
 
 	return &Scanner{
-		timeout: config.Timeout,
-		verbose: config.Verbose,
-		version: config.Version,
-		maxWorkers: config.MaxWorkers,
-		scanType: config.ScanType,
-		userAgent: config.UserAgent,
+		timeout:        config.Timeout,
+		verbose:        config.Verbose,
+		version:        config.Version,
+		maxWorkers:     config.MaxWorkers,
+		scanType:       config.ScanType,
+		userAgent:      config.UserAgent,
 		skipHostDomain: config.SKipHostDomain,
-		outputFormat: config.OutputFormat,
-		rateLimit: config.RateLimit,
-		retries: config.Retries,
-		proxyURL: config.ProxyURL,
+		outputFormat:   config.OutputFormat,
+		rateLimit:      config.RateLimit,
+		retries:        config.Retries,
+		proxyURL:       config.ProxyURL,
 	}
 }
 
-
 type ScanResult struct {
-	Host string `json:"host"`
-	Port int `json:"port"`
-	Protocol string `json:"protocol"`
-	Service string `json:"service"`
-	Version string `json:"version,omitempty"`
-	Banner string `json:"banner,omitempty"`
-	Open bool `json:"open"`
-	Filtered bool `json:"filtered,omitempty"`
-	State string `json:"state"`
-	ResponseTime time.Duration `json:"response_time"`
-	SSL *SSLInfo `json:"ssl,omitempty"`
-	HTTP *HTTPInfo `json:"http,omitempty"`
-	Vulnerabilities []string `json:"vulnerabilities,omitempty"`
-	Headers map[string]string `json:"headers,omitempty"`
-	Timestamp time.Time `json:"timestamp"`
-
+	Host            string            `json:"host"`
+	Port            int               `json:"port"`
+	Protocol        string            `json:"protocol"`
+	Service         string            `json:"service"`
+	Version         string            `json:"version,omitempty"`
+	Banner          string            `json:"banner,omitempty"`
+	Open            bool              `json:"open"`
+	Filtered        bool              `json:"filtered,omitempty"`
+	State           string            `json:"state"`
+	ResponseTime    time.Duration     `json:"response_time"`
+	SSL             *SSLInfo          `json:"ssl,omitempty"`
+	HTTP            *HTTPInfo         `json:"http,omitempty"`
+	Vulnerabilities []string          `json:"vulnerabilities,omitempty"`
+	Headers         map[string]string `json:"headers,omitempty"`
+	Timestamp       time.Time         `json:"timestamp"`
 }
 
 type SSLInfo struct {
-	Version string `json:"version"`
-	Cipher string `json:"cipher"`
-	Issuer string `json:"issuer"`
-	Subject string `json:"subject"`
-	NotBefore time.Time `json:"not_before"`
-	NotAfter time.Time `json:"not_after"`
-	Fingerprint string `json:"fingerprint"`
+	Version     string    `json:"version"`
+	Cipher      string    `json:"cipher"`
+	Issuer      string    `json:"issuer"`
+	Subject     string    `json:"subject"`
+	NotBefore   time.Time `json:"not_before"`
+	NotAfter    time.Time `json:"not_after"`
+	Fingerprint string    `json:"fingerprint"`
 }
 
 type HTTPInfo struct {
-	StatusCode int `json:"status_code"`
-	Server string `json:"server"`
-	Title string `json:"title"`
-	Headers map[string]string `json:"headers"`
-	Redirects []string `json:"redirects,omitempty"`
+	StatusCode int               `json:"status_code"`
+	Server     string            `json:"server"`
+	Title      string            `json:"title"`
+	Headers    map[string]string `json:"headers"`
+	Redirects  []string          `json:"redirects,omitempty"`
 }
 
 type HostScanResult struct {
-	Host         string       `json:"host"`
-	IsAlive      bool         `json:"is_alive"`
-	OpenPorts    []ScanResult `json:"open_ports"`
-	ClosedPorts  []ScanResult `json:"closed_ports,omitempty"`
-	FilteredPorts []ScanResult `json:"filtered_ports,omitempty"`
-	ScanTime     time.Duration `json:"scan_time"`
-	Timestamp    time.Time    `json:"timestamp"`
-	OS          *OSInfo      `json:"os,omitempty"`
+	Host          string        `json:"host"`
+	IsAlive       bool          `json:"is_alive"`
+	OpenPorts     []ScanResult  `json:"open_ports"`
+	ClosedPorts   []ScanResult  `json:"closed_ports,omitempty"`
+	FilteredPorts []ScanResult  `json:"filtered_ports,omitempty"`
+	ScanTime      time.Duration `json:"scan_time"`
+	Timestamp     time.Time     `json:"timestamp"`
+	OS            *OSInfo       `json:"os,omitempty"`
 }
-
 
 type OSInfo struct {
 	Name       string  `json:"name"`
@@ -158,7 +153,6 @@ type OSInfo struct {
 	Confidence float64 `json:"confidence"`
 	Details    string  `json:"details"`
 }
-
 
 func (s *Scanner) ScanHost(host, portRange string) (*HostScanResult, error) {
 	start := time.Now()
@@ -172,10 +166,10 @@ func (s *Scanner) ScanHost(host, portRange string) (*HostScanResult, error) {
 			fmt.Println(warningStyle.Render(fmt.Sprintf("Host %s is down", host)))
 		}
 		return &HostScanResult{
-			Host: host,
-			IsAlive: false,
+			Host:      host,
+			IsAlive:   false,
 			Timestamp: time.Now(),
-			ScanTime: time.Since(start),
+			ScanTime:  time.Since(start),
 		}, nil
 	}
 	ports, err := s.parsePorts(portRange)
@@ -183,18 +177,17 @@ func (s *Scanner) ScanHost(host, portRange string) (*HostScanResult, error) {
 		return nil, fmt.Errorf("Failed to parse port range: %w", err)
 	}
 
-
 	resilts := s.scanPorts(host, ports)
 
 	hostResult := &HostScanResult{
-		Host: host,
-		IsAlive: true,
+		Host:      host,
+		IsAlive:   true,
 		Timestamp: time.Now(),
-		ScanTime: time.Since(start),
+		ScanTime:  time.Since(start),
 	}
 
 	for _, result := range resilts {
-		if result.Opne {
+		if result.Open {
 			hostResult.OpenPorts = append(hostResult.OpenPorts, result)
 		} else if result.Filtered {
 			hostResult.FilteredPorts = append(hostResult.FilteredPorts, result)
@@ -204,7 +197,7 @@ func (s *Scanner) ScanHost(host, portRange string) (*HostScanResult, error) {
 	}
 
 	sort.Slice(hostResult.OpenPorts, func(i, j int) bool {
-		resilts hoshostResult.OpenPorts[i].Port < hosthostResult.OpenPorts[j].Port
+		return hostResult.OpenPorts[i].Port < hostResult.OpenPorts[j].Port
 	})
 
 	if len(hostResult.OpenPorts) > 0 {
@@ -215,9 +208,7 @@ func (s *Scanner) ScanHost(host, portRange string) (*HostScanResult, error) {
 	return hostResult, nil
 }
 
-
-
-func (s *Scanner) ScanRange(ipRange, portRange string) ([]*HostScanResult, error){
+func (s *Scanner) ScanRange(ipRange, portRange string) ([]*HostScanResult, error) {
 	fmt.Println(scanStyle.Render(fmt.Sprintf("Scanning range %s...", ipRange)))
 
 	ips, err := parseIPRange(ipRange)
@@ -244,18 +235,17 @@ func (s *Scanner) ScanRange(ipRange, portRange string) ([]*HostScanResult, error
 				results = append(results, res)
 				mu.Unlock()
 			} else if s.verbose {
-                fmt.Println(errorStyle.Render(fmt.Sprintf("Error scannig host %s: %v", host, err)))
-            }
+				fmt.Println(errorStyle.Render(fmt.Sprintf("Error scannig host %s: %v", host, err)))
+			}
 		}(ip)
 	}
 
 	wg.Wait()
 	return results, nil
 
-
 }
 
-func (s *Scanner) parsePorts(portRange string) []int {
+func (s *Scanner) parsePorts(portRange string) ([]int, error) {
 	var ports []int
 
 	if strings.Contains(portRange, "-") {
@@ -280,15 +270,15 @@ func (s *Scanner) parsePorts(portRange string) []int {
 		}
 	}
 
-	return ports
+	return ports, nil
 }
 
-func (s *Scanner) scanPorts(host string, ports []int) []int {
-	var openPorts []int
+func (s *Scanner) scanPorts(host string, ports []int) []ScanResult {
+	var results []ScanResult
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 
-	sem := make(chan struct{}, 100)
+	sem := make(chan struct{}, s.maxWorkers)
 
 	for _, port := range ports {
 		wg.Add(1)
@@ -297,27 +287,59 @@ func (s *Scanner) scanPorts(host string, ports []int) []int {
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			if s.isPortOpen(host, p) {
-				mu.Lock()
-				openPorts = append(openPorts, p)
-				mu.Unlock()
+			open := s.isPortOpen(host, p)
 
-				if s.verbose {
-					fmt.Printf("%s %d/tcp\n", openStyle.Render("✓"), p)
+			result := ScanResult{
+				Host:         host,
+				Port:         p,
+				Protocol:     "tcp",
+				Service:      s.getServiceName(p),
+				Open:         open,
+				State:        "closed",
+				ResponseTime: s.timeout,
+				Timestamp:    time.Now(),
+			}
+
+			if open {
+				result.State = "open"
+				if s.version {
+					result.Version = s.detectVersion(host, p)
 				}
-			} else if s.verbose {
-				fmt.Printf("%s %d/tcp\n", closedStyle.Render("✗"), p)
+			}
+
+			mu.Lock()
+			results = append(results, result)
+			mu.Unlock()
+
+			if s.verbose {
+				stateStyle := closedStyle
+				symbol := "X"
+				if open {
+					stateStyle = openStyle
+					symbol = "✔️"
+				}
+				fmt.Printf("%s %d/tcp\n", stateStyle.Render(symbol), p)
 			}
 		}(port)
 	}
 
 	wg.Wait()
-	return openPorts
+	return results
 }
 
 func (s *Scanner) isPortOpen(host string, port int) bool {
 	timeout := time.Duration(s.timeout) * time.Second
 	conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", host, port), timeout)
+	if err != nil {
+		return false
+	}
+	conn.Close()
+	return true
+}
+
+func (s *Scanner) isHostAlive(host string) bool {
+	timeout := time.Duration(s.timeout) * time.Second
+	conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s", host), timeout)
 	if err != nil {
 		return false
 	}
@@ -357,15 +379,11 @@ func (s *Scanner) getServiceName(port int) string {
 	return "unknown"
 }
 
-type ScanResult struct {
-	Port    int
-	Service string
-	Version string
-	Open    bool
-}
-
 func (s *Scanner) ScanHostWithResults(host, portRange string) []ScanResult {
-	ports := s.parsePorts(portRange)
+	ports, err := s.parsePorts(portRange)
+	if err != nil {
+		return nil
+	}
 	var results []ScanResult
 	var mu sync.Mutex
 	var wg sync.WaitGroup
@@ -427,6 +445,51 @@ func (s *Scanner) detectVersion(host string, port int) string {
 	return fmt.Sprintf("(%s)", banner)
 }
 
+/*func (s *Scanner) detectOS(host string) string {
+	os := runtime.GOOS
+    switch os {
+    case "windows":
+        fmt.Println("Windows")
+    case "darwin":
+        fmt.Println("MAC operating system")
+    case "linux":
+        fmt.Println("Linux")
+    default:
+        fmt.Printf("%s.\n", os)
+    }
+
+	return os
+}
+
+*/
+
+func (s *Scanner) detectOS(host string, openPorts []ScanResult) *OSInfo {
+	for _, port := range openPorts {
+		if port.Port == 445 || port.Port == 135 {
+			return &OSInfo{
+				Name:       "Windows",
+				Version:    "10/11",
+				Confidence: 0.8,
+				Details:    "Based on SMB and RPC port",
+			}
+		}
+		if port.Port == 22 || port.Port == 111 {
+			return &OSInfo{
+				Name:       "Linux",
+				Version:    "Unknown",
+				Confidence: 0.7,
+				Details:    "Based on SSH/NFS",
+			}
+		}
+	}
+	return &OSInfo{
+		Name:       "Unknown",
+		Version:    "N/A",
+		Confidence: 0.3,
+		Details:    "Could not identify OS",
+	}
+}
+
 func parseIPRange(ipRange string) ([]string, error) {
 	parts := strings.Split(ipRange, "-")
 	if len(parts) != 2 {
@@ -460,3 +523,32 @@ func nextIP(ip net.IP) net.IP {
 	return result
 }
 
+func (s *Scanner) displayResults(result *HostScanResult) {
+	fmt.Println()
+	fmt.Println(scanStyle.Render(fmt.Sprintf("Scan Results for %s", result.Host)))
+	fmt.Println(infoStyle.Render(fmt.Sprintf("Scan Time: %v", result.ScanTime)))
+	if result.OS != nil {
+		fmt.Println(warningStyle.Render(fmt.Sprintf("OS Detected: %s (%s) - Confidence: %.2f",
+			result.OS.Name, result.OS.Version, result.OS.Confidence)))
+	}
+
+	printPorts := func(ports []ScanResult, label string, style lipgloss.Style) {
+		if len(ports) == 0 {
+			return
+		}
+		fmt.Println(style.Render(fmt.Sprintf("\n[%s]", label)))
+		for _, port := range ports {
+			fmt.Printf("%s %d/%s %s\n",
+				style.Render("•"),
+				port.Port,
+				port.Protocol,
+				infoStyle.Render(port.Service))
+		}
+	}
+
+	printPorts(result.OpenPorts, "Open Ports", openStyle)
+	printPorts(result.ClosedPorts, "Closed Ports", closedStyle)
+	printPorts(result.FilteredPorts, "Filtered Ports", warningStyle)
+
+	fmt.Println()
+}
