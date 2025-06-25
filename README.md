@@ -1,7 +1,7 @@
 # ncCmdExe
 
-![Logo](./assets/logo.png)
 
+<img src=",/assets/logo.png" alt="Logo" width="400"/>
 
 
 ---
