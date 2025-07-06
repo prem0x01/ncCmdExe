@@ -14,16 +14,18 @@ A modern, powerful tool for network interaction and debugging, written in Go —
 
 ## ✨ Features
 
-- ✅ **Listen and Connect**
-- 🖥️ **Command Execution**
-- 🐚 **Interactive Shell Mode**
-- 🔍 **Port Scanning with Version Detection**
-- 💬 **Modern TUI interface using BubbleTea**
-- 📡 **UDP / TCP Protocol Switching**
-- 🔧 **Verbose & Keep-Alive Options**
+-  **Listen and Connect**
+-  **Command Execution**
+-  **Interactive Shell Mode**
+-  **Port Scanning with Version Detection**
+-  **Modern TUI interface using BubbleTea**
+-  **UDP / TCP Protocol Switching**
+-  **Verbose & Keep-Alive Options**
 
 ---
-![Terminal Preview](./assets/help.png)
+![Terminal Preview](./assets/help.jpg)
+
+![After geting connection](./assets/connection.jpg)
 
 ## 📦 Installation
 
