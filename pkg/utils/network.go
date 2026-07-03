@@ -1,72 +1,46 @@
 package utils
 
 import (
-	"runtime"
-	"unsafe"
-	"github.com/rodrigocfd/windigo/win"
-    "github.com/rodrigocfd/windigo/win/co"
+	"fmt"
+	"image/png"
+	"os"
+	"path/filepath"
+
+	"github.com/kbinani/screenshot"
 )
 
-func TakeScreenShot() {
-	runtime.LockOSThread()
-
-	cxScreen := win.GetSystemMetrics(co.SM_CXSCREEN)
-	cyScreen := win.GetSystemMetrics(co.SM_CYSCREEN)
-
-	hdcScreen := win.HWND(0).GetDC()
-	defer win.HWND(0).ReleaseDC(hdcScreen)
-
-	hBmp := hdcScreen.CreateCompatibleBitmap(cxScreen, cyScreen)
-	defer hBmp.DeleteObject()
-
-	hdcMem := hdcScreen.CreateCompatibleDC()
-	defer hdcMem.DeleteDC()
-
-	hBmpOld := hdcMem.SelectObjectBitmap(hBmp)
-	defer hdcMem.SelectObjectBitmap(hBmpOld)
-
-	hdcMem.BitBlt(
-		win.POINT{X: 0, Y: 0},
-		win.SIZE{Cx: cxScreen, Cy: cyScreen},
-		hdcScreen,
-		win.POINT{X: 0, Y: 0},
-		co.ROP_SRCCOPY,
-	)
-
-	bi := win.BITMAPINFO{
-		BmiHeader: win.BITMAPINFOHEADER{
-			BiWidth:       cxScreen,
-			BiHeight:      cyScreen,
-			BiPlanes:      1,
-			BiBitCount:    32,
-			BiCompression: co.BI_RGB,
-		},
+func TakeScreenShot(dir string) ([]string, error) {
+	if dir == "" {
+		dir = os.TempDir()
 	}
-	bi.BmiHeader.SetBiSize()
 
-	bmpObj := win.BITMAP{}
-	hBmp.GetObject(&bmpObj)
-	bmpSize := bmpObj.CalcBitmapSize(bi.BmiHeader.BiBitCount)
+	n := screenshot.NumActiveDisplays()
+	if n <= 0 {
+		return nil, fmt.Errorf("no active displays found (headless host or no display server?)")
+	}
 
-	rawMem := win.GlobalAlloc(co.GMEM_FIXED|co.GMEM_ZEROINIT, bmpSize)
-	defer rawMem.GlobalFree()
+	var paths []string
+	for i := 0; i < n; i++ {
+		bounds := screenshot.GetDisplayBounds(i)
+		img, err := screenshot.CaptureRect(bounds)
+		if err != nil {
+			return paths, fmt.Errorf("capture display %d: %w", i, err)
+		}
 
-	bmpSlice := rawMem.GlobalLock(int(bmpSize))
-	defer rawMem.GlobalUnlock()
+		path := filepath.Join(dir, fmt.Sprintf("screenshot-%d.png", i))
+		f, err := os.Create(path)
+		if err != nil {
+			return paths, fmt.Errorf("create %s: %w", path, err)
+		}
 
-	hdcScreen.GetDIBits(hBmp, 0, int(cyScreen), bmpSlice, &bi, co.DIB_RGB_COLORS)
+		if err := png.Encode(f, img); err != nil {
+			f.Close()
+			return paths, fmt.Errorf("encode %s: %w", path, err)
+		}
+		f.Close()
 
-	bfh := win.BITMAPFILEHEADER{}
-	bfh.SetBfType()
-	bfh.SetBfOffBits(uint32(unsafe.Sizeof(bfh) + unsafe.Sizeof(bi.BmiHeader)))
-	bfh.SetBfSize(bfh.BfOffBits() + uint32(bmpSize))
+		paths = append(paths, path)
+	}
 
-	fo, _ := win.FileOpen("C:\\users\\rodrigo\\desktop\\a.bmp", co.FILE_OPEN_RW_OPEN_OR_CREATE)
-	defer fo.Close()
-
-	fo.Write(bfh.Serialize())
-	fo.Write(bi.BmiHeader.Serialize())
-	fo.Write(bmpSlice)
-
-	println("Done")
+	return paths, nil
 }

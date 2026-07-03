@@ -12,27 +12,35 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// ── flags ─────────────────────────────────────────────────────────────────────
+
 var (
-	listen    bool
-	port      int
-	host      string
-	udp       bool
-	execute   string
-	shell     bool
-	scan      bool
-	scanPorts string
-	scanRange string
-	version   bool
-	verbose   bool
-	timeout   int
-	keepAlive bool
+	listen     bool
+	port       int
+	host       string
+	udp        bool
+	execute    string
+	shell      bool
+	scan       bool
+	scanPorts  string
+	scanRange  string
+	version    bool
+	verbose    bool
+	timeout    int
+	keepAlive  bool
+	streaming  bool
+	execMode   bool   // framed exec REPL  (server: --exec-mode  client: --exec-mode)
+	ttyMode    bool   // full PTY remote shell (server: serve PTY  client: attach with raw terminal)
+	uploadFile string // client: upload this file after connecting
+	recvFile   bool   // client: receive a file from server
 )
 
-var rootCmd = &cobra.Command{
-	Use:   "ncCmdExe",
-	Short: "NetCat with  Command Execution!",
-	Long: `
+// ── root command ──────────────────────────────────────────────────────────────
 
+var rootCmd = &cobra.Command{
+	Use:   "ncCmdExe [host]",
+	Short: "Netcat-style toolkit written in Go",
+	Long: `
                       /$$$$$$                      /$$ /$$$$$$$$
                      /$$__  $$                    | $$| $$_____/
  /$$$$$$$   /$$$$$$$| $$  \__/ /$$$$$$/$$$$   /$$$$$$$| $$       /$$   /$$  /$$$$$$
@@ -42,87 +50,179 @@ var rootCmd = &cobra.Command{
 | $$  | $$|  $$$$$$$|  $$$$$$/| $$ | $$ | $$|  $$$$$$$| $$$$$$$$ /$$/\  $$|  $$$$$$$
 |__/  |__/ \_______/ \______/ |__/ |__/ |__/ \_______/|________/|__/  \__/ \_______/
 
-	Developed by : prem0x01
+  Developed by: prem0x01
 
+  ── Modes ────────────────────────────────────────────────────────────────────
 
-	Features:
-		[*] Listen and Connect
-		[*] Command Execution & Shell access
-		[*] Port & Service sacnning with version detection
-	`,
+  (no flags)                  Open the interactive TUI menu
+  -l                          Listen — plain relay
+  -l -s                       Listen — PTY bind shell (arrow keys, tab, etc.)
+  -l -e "cmd"                 Listen — run fixed command on connect (classic -e)
+  -l --exec-mode              Listen — interactive exec REPL with file transfer
+  -l --stream                 Listen — stream screen to connecting client
+  <host>                      Connect — relay mode
+  <host> --exec-mode          Connect — interactive exec REPL
+  <host> --exec-mode --upload <file>   Upload a file then drop to REPL
+  <host> --exec-mode --recv   Receive a file from server
+  <host> --stream             Connect — view screen stream in browser
+  -S <host>                   Scan ports
 
-	Run: func(cmd *cobra.Command, args []string) {
-		if !listen && !scan && execute == "" && len(args) == 0 {
-			cmd.Help()
-			return
+  ── Examples ─────────────────────────────────────────────────────────────────
+
+  ncCmdExe                                  # TUI menu
+  ncCmdExe -l -p 4444 -s                   # PTY bind shell
+  ncCmdExe -l -p 4444 --exec-mode          # exec REPL server
+  ncCmdExe 10.0.0.5 -p 4444 --exec-mode    # exec REPL client (interactive)
+  ncCmdExe 10.0.0.5 -p 4444 --exec-mode --upload secret.txt
+  ncCmdExe -l -p 4444 --stream             # stream screen
+  ncCmdExe 10.0.0.5 -p 4444 --stream       # watch stream
+  ncCmdExe -S 192.168.1.1 --ports 1-1024   # port scan
+`,
+
+	RunE: func(cmd *cobra.Command, args []string) error {
+		noAction := !listen && !scan && execute == "" && !streaming && !execMode && !ttyMode &&
+			uploadFile == "" && !recvFile
+
+		if noAction && len(args) == 0 {
+			runTUI("")
+			return nil
 		}
-		if !listen && !scan && execute == "" && len(args) == 1 {
-			startUIWithConnect(args[0])
-			return
+		if noAction && len(args) == 1 {
+			runTUI(args[0])
+			return nil
 		}
-
-		handleActions(args)
+		return handleActions(args)
 	},
 }
 
 func init() {
-	rootCmd.Flags().BoolVarP(&listen, "listen", "l", false, "Listen for incomming connections")
-	rootCmd.Flags().IntVarP(&port, "port", "p", 8080, "Port number")
-	rootCmd.Flags().StringVarP(&host, "host", "H", "localhost", "Host address")
-	rootCmd.Flags().BoolVarP(&udp, "udp", "u", false, "Use UDP insted of TCP")
-	rootCmd.Flags().StringVarP(&execute, "execute", "e", "", "Execute command")
-	rootCmd.Flags().BoolVarP(&shell, "shell", "s", false, "Enable shell mode")
-	rootCmd.Flags().BoolVarP(&scan, "scan", "S", false, "Enable port scanning")
-	rootCmd.Flags().StringVar(&scanPorts, "ports", "1-1000", "Ports to scan (e.g., 80,443 or 1-1000)")
-	rootCmd.Flags().StringVar(&scanRange, "range", "", "IP range to scan")
-	rootCmd.Flags().BoolVarP(&version, "version-scan", "v", false, "Enable version detection")
-	rootCmd.Flags().BoolVar(&verbose, "verbose", false, "Verbose output")
-	rootCmd.Flags().IntVarP(&timeout, "timeout", "t", 5, "Connection timeout in seconds")
-	rootCmd.Flags().BoolVarP(&keepAlive, "keep-alive", "k", false, "Keep connection alive")
+	f := rootCmd.Flags()
+
+	// Connection
+	f.BoolVarP(&listen, "listen", "l", false, "Listen for incoming connections")
+	f.IntVarP(&port, "port", "p", 4444, "Port number")
+	f.StringVarP(&host, "host", "H", "", "Host address (alternative to positional arg)")
+	f.BoolVarP(&udp, "udp", "u", false, "Use UDP instead of TCP")
+	f.IntVarP(&timeout, "timeout", "t", 5, "Connection / scan timeout in seconds")
+	f.BoolVarP(&keepAlive, "keep-alive", "k", false, "Enable TCP keep-alive")
+
+	// Execution modes
+	f.StringVarP(&execute, "execute", "e", "", "Execute a fixed command on connect (classic nc -e)")
+	f.BoolVarP(&shell, "shell", "s", false, "Spawn PTY interactive shell on connect")
+	f.BoolVar(&execMode, "exec-mode", false, "Framed exec REPL with file transfer support")
+
+	// File transfer
+	f.StringVar(&uploadFile, "upload", "", "Upload this local file after connecting (requires --exec-mode)")
+	f.BoolVar(&recvFile, "recv", false, "Receive a file from the server (requires --exec-mode)")
+
+	// Screen streaming
+	f.BoolVar(&streaming, "stream", false, "Stream screen (server) / view stream (client)")
+
+	// Remote shell
+	f.BoolVar(&ttyMode, "tty", false, "Remote shell: serve PTY (-l) or attach with raw terminal (client)")
+
+	// Scanning
+	f.BoolVarP(&scan, "scan", "S", false, "Enable port scanning")
+	f.StringVar(&scanPorts, "ports", "1-1000", "Ports to scan (e.g. 80,443 or 1-1000)")
+	f.StringVar(&scanRange, "range", "", "IP range to scan (e.g. 192.168.1.1-192.168.1.254)")
+	f.BoolVarP(&version, "version-scan", "v", false, "Service version detection during scan")
+	f.BoolVar(&verbose, "verbose", false, "Verbose scan output")
 }
 
+// Execute is the entry point called from main.
 func Execute() error {
 	return rootCmd.Execute()
 }
 
-func startUIWithConnect(hostPort string) {
+// ── TUI launcher ─────────────────────────────────────────────────────────────
+
+func runTUI(prefillConnect string) {
 	m := ui.NewModel()
-	m.StateToConnect(hostPort)
+	if prefillConnect != "" {
+		m.StateToConnect(prefillConnect)
+	}
 
 	p := tea.NewProgram(m, tea.WithAltScreen())
-	if _, err := p.Run(); err != nil {
-		fmt.Printf("Error running TUI: %v\n", err)
+	final, err := p.Run()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "TUI error: %v\n", err)
 		os.Exit(1)
+	}
+
+	act := final.(ui.Model).Action()
+	switch act.Kind {
+	case "remote-shell-server":
+		core.NewServer(act.Port, false, "", false, false, false, false).WithRemoteShell(true).Start()
+	case "remote-shell-client":
+		fmt.Printf("Attaching to remote shell on %s:%d …\n", act.Host, act.Port)
+		core.NewClient(act.Host, act.Port, false, 5, false, false, false).WithRemoteShell(true).Connect()
+	case "connect":
+		fmt.Printf("Connecting to %s:%d …\n", act.Host, act.Port)
+		core.NewClient(act.Host, act.Port, false, 5, false, false, false).Connect()
+	case "listen":
+		core.NewServer(act.Port, false, "", false, false, false, false).Start()
+	case "shell":
+		core.NewServer(act.Port, false, "", true, false, false, false).Start()
+	case "exec-server":
+		core.NewServer(act.Port, false, "", false, false, false, true).Start()
+	case "exec-client":
+		core.NewClient(act.Host, act.Port, false, 5, false, false, true).Connect()
+	case "stream-send":
+		core.NewServer(act.Port, false, "", false, false, true, false).Start()
+	case "stream-recv":
+		core.NewClient(act.Host, act.Port, false, 5, false, true, false).Connect()
 	}
 }
 
-/*
-	func startUI() {
-		m := ui.NewModel()
-		p := tea.NewProgram(m, tea.WithAltScreen())
-		if _, err := p.Run(); err != nil {
-			fmt.Printf("Error running TUI: %v\n", err)
-			os.Exit(1)
-		}
+// ── CLI action handler ────────────────────────────────────────────────────────
+
+func handleActions(args []string) error {
+	target := host
+	if len(args) > 0 {
+		target = args[0]
 	}
-*/
-func handleActions(args []string) {
-	if listen {
-		server := core.NewServer(port, udp, execute, shell)
-		server.Start()
-	} else if scan {
-		scanner := scanner.New(scanner.ScannerConfig{
-			Timeout: time.Second * 5,
-			Verbose: true,
-			Version: true,
+
+	switch {
+	case listen && ttyMode:
+		core.NewServer(port, udp, "", false, keepAlive, false, false).WithRemoteShell(true).Start()
+
+	case listen:
+		core.NewServer(port, udp, execute, shell, keepAlive, streaming, execMode).Start()
+
+	case scan:
+		sc := scanner.New(scanner.ScannerConfig{
+			Timeout: time.Duration(timeout) * time.Second,
+			Verbose: verbose,
+			Version: version,
 		})
 		if scanRange != "" {
-			scanner.ScanRange(scanRange, scanPorts)
-		} else if len(args) > 0 {
-			scanner.ScanHost(args[0], scanPorts)
+			if _, err := sc.ScanRange(scanRange, scanPorts); err != nil {
+				return fmt.Errorf("scan range: %w", err)
+			}
+		} else if target != "" {
+			if _, err := sc.ScanHost(target, scanPorts); err != nil {
+				return fmt.Errorf("scan host: %w", err)
+			}
+		} else {
+			return fmt.Errorf("scan requires a target host or --range")
 		}
-	} else if len(args) > 0 {
-		client := core.NewClient(args[0], port, udp, timeout)
-		client.Connect()
+
+	case target != "" && ttyMode:
+		core.NewClient(target, port, udp, timeout, keepAlive, false, false).WithRemoteShell(true).Connect()
+
+	case target != "":
+		c := core.NewClient(target, port, udp, timeout, keepAlive, streaming, execMode)
+		if uploadFile != "" {
+			c.WithFileSend(uploadFile)
+		}
+		if recvFile {
+			c.WithFileRecv(true)
+		}
+		c.Connect()
+
+	default:
+		return fmt.Errorf("nothing to do — run 'ncCmdExe --help'")
 	}
+
+	return nil
 }

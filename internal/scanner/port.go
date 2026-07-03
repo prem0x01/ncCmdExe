@@ -328,8 +328,8 @@ func (s *Scanner) scanPorts(host string, ports []int) []ScanResult {
 }
 
 func (s *Scanner) isPortOpen(host string, port int) bool {
-	timeout := time.Duration(s.timeout) * time.Second
-	conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", host, port), timeout)
+	// s.timeout is already a time.Duration; don't re-scale it.
+	conn, err := net.DialTimeout("tcp", net.JoinHostPort(host, strconv.Itoa(port)), s.timeout)
 	if err != nil {
 		return false
 	}
@@ -338,13 +338,27 @@ func (s *Scanner) isPortOpen(host string, port int) bool {
 }
 
 func (s *Scanner) isHostAlive(host string) bool {
-	timeout := time.Duration(s.timeout) * time.Second
-	conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s", host), timeout)
-	if err != nil {
-		return false
+	// A bare host with no port is not a valid dial target, so probe a few
+	// common ports. A successful connect OR a "connection refused" both prove
+	// the host is up; only a timeout (no route / filtered) means down.
+	probes := []int{80, 443, 22, 3389, 445}
+	for _, p := range probes {
+		conn, err := net.DialTimeout("tcp", net.JoinHostPort(host, strconv.Itoa(p)), s.timeout)
+		if err == nil {
+			conn.Close()
+			return true
+		}
+		if !isTimeout(err) {
+			// Refused/reset => something answered => host is alive.
+			return true
+		}
 	}
-	conn.Close()
-	return true
+	return false
+}
+
+func isTimeout(err error) bool {
+	ne, ok := err.(net.Error)
+	return ok && ne.Timeout()
 }
 
 func (s *Scanner) getServiceName(port int) string {
@@ -421,8 +435,7 @@ func (s *Scanner) ScanHostWithResults(host, portRange string) []ScanResult {
 }
 
 func (s *Scanner) detectVersion(host string, port int) string {
-	timeout := time.Duration(s.timeout) * time.Second
-	conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", host, port), timeout)
+	conn, err := net.DialTimeout("tcp", net.JoinHostPort(host, strconv.Itoa(port)), s.timeout)
 	if err != nil {
 		return ""
 	}
